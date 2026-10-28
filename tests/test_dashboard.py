@@ -26,7 +26,7 @@ def test_dashboard_pages(client, payload, account_factory):
     assert client.post(f'/emails/{ident}/process').status_code == 200
     with patch('httpx.request', side_effect=bridge(client)) as requests:
         app = AppTest.from_file(SCRIPT, default_timeout=20).run()
-        assert requests.call_count == 0
+        assert all('/auth/registration' in call.args[1] for call in requests.call_args_list)
         sign_in(app, 'owner')
         assert not any(field.label == 'Access token' for field in app.text_input)
         next(button for button in app.button if button.label == f'Open email #{ident}').click().run()
@@ -48,7 +48,7 @@ def test_wrong_password_cannot_read_inbox(client, account_factory):
         app.button[0].click().run()
         assert app.error[0].value == 'Username or password is incorrect'
         assert not app.radio and not app.text_area
-        assert all('/auth/login' in call.args[1] for call in requests.call_args_list)
+        assert all(any(path in call.args[1] for path in ['/auth/login', '/auth/registration']) for call in requests.call_args_list)
 
 
 def test_viewer_dashboard_is_read_only(client, payload, account_factory):
@@ -109,3 +109,45 @@ def test_password_validation_does_not_echo_secret(client, account_factory):
         next(button for button in app.button if button.label == 'Create account').click().run()
         assert not app.exception and app.error
         assert 'secret123' not in app.error[0].value
+
+
+def test_self_registration_signs_in_as_reviewer(client, account_factory):
+    account_factory()
+    with patch('httpx.request', side_effect=bridge(client)):
+        app = AppTest.from_file(SCRIPT, default_timeout=20).run()
+        values = {'Choose a username': 'self.registered', 'Your name (optional)': 'Self Registered',
+                  'Choose a password (at least 16 characters)': PASSWORD, 'Confirm password': PASSWORD}
+        for field in app.text_input:
+            if field.label in values:
+                field.set_value(values[field.label])
+        next(button for button in app.button if button.label == 'Create account').click().run()
+        assert not app.exception
+        assert app.radio[0].value == 'Inbox' and 'Users' not in app.radio[0].options
+        assert any('Your account is ready' in item.value for item in app.success)
+        app.radio[0].set_value('My Account').run()
+        assert any('self.registered' in item.value for item in app.markdown)
+
+
+def test_registration_password_mismatch_never_submits(client, account_factory):
+    account_factory()
+    with patch('httpx.request', side_effect=bridge(client)) as requests:
+        app = AppTest.from_file(SCRIPT).run()
+        for field in app.text_input:
+            if field.label == 'Choose a password (at least 16 characters)':
+                field.set_value(PASSWORD)
+            elif field.label == 'Confirm password':
+                field.set_value('different-test-password')
+        next(button for button in app.button if button.label == 'Create account').click().run()
+        assert any('do not match' in error.value for error in app.error)
+        assert not any('/auth/register' in call.args[1] for call in requests.call_args_list)
+
+
+def test_disabled_registration_hides_signup(client, monkeypatch):
+    from app.core.config import get_settings
+    monkeypatch.setenv('PUBLIC_SIGNUP_ENABLED', 'false')
+    get_settings.cache_clear()
+    with patch('httpx.request', side_effect=bridge(client)):
+        app = AppTest.from_file(SCRIPT).run()
+        assert not app.exception
+        assert not any(button.label == 'Create account' for button in app.button)
+        assert not any('New here?' in item.value for item in app.markdown)

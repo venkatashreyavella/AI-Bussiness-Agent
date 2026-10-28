@@ -8,7 +8,8 @@ from app.models import UserAccount, AuthSession, LoginAttempt, SecurityAudit, ut
 from app.core.security import (hash_password, verify_password, token_hash, current_principal,
                                require_admin, audit)
 from app.schemas.accounts import (Login, AccountCreate, AccountUpdate, PasswordReset,
-    PasswordChange, AccountResponse, SessionResponse)
+    PasswordChange, AccountResponse, SessionResponse, AccountRegistration)
+from app.core.config import get_settings
 
 router = APIRouter(tags=['Accounts'])
 DUMMY_HASH = hash_password('invalid-account-password-never-accepted')
@@ -20,6 +21,46 @@ def public_user(user):
 
 def revoke_sessions(db, user_id):
     db.execute(update(AuthSession).where(AuthSession.user_id == user_id).values(revoked=True))
+
+
+@router.get('/auth/registration')
+def registration_options():
+    return {'enabled': get_settings().public_signup_enabled, 'role': 'reviewer'}
+
+
+@router.post('/auth/register', response_model=SessionResponse, status_code=201)
+def register(payload: AccountRegistration, db=Depends(get_db)):
+    if not get_settings().public_signup_enabled:
+        raise HTTPException(403, 'Public account creation is disabled. Contact the administrator.')
+    if not db.scalar(select(UserAccount.id).where(UserAccount.role == 'admin', UserAccount.active.is_(True)).limit(1)):
+        raise HTTPException(503, 'Workspace setup is incomplete. Contact the administrator.')
+    if db.bind.dialect.name == 'postgresql':
+        db.execute(text('SELECT pg_advisory_xact_lock(48105002)'))
+    registration_key = token_hash('public_registration_attempt')
+    cutoff = utcnow() - timedelta(minutes=1)
+    db.execute(delete(LoginAttempt).where(LoginAttempt.created_at < utcnow() - timedelta(days=1)))
+    attempts = db.scalar(select(func.count()).select_from(LoginAttempt).where(
+        LoginAttempt.identity_hash == registration_key, LoginAttempt.created_at >= cutoff))
+    if attempts >= 10:
+        raise HTTPException(429, 'Too many account-creation attempts. Wait one minute and try again.', headers={'Retry-After': '60'})
+    # Persist the throttle before password hashing so rejected/duplicate attempts count too.
+    db.add(LoginAttempt(identity_hash=registration_key))
+    db.commit()
+    if db.scalar(select(UserAccount.id).where(UserAccount.username == payload.username)):
+        raise HTTPException(409, 'This username is already taken. Choose another username.')
+    user = UserAccount(username=payload.username, display_name=payload.display_name or payload.username,
+                       password_hash=hash_password(payload.password), role='reviewer', active=True)
+    db.add(user)
+    try:
+        db.flush()
+        token, expires = secrets.token_urlsafe(32), utcnow() + timedelta(hours=1)
+        db.add(AuthSession(user_id=user.id, token_hash=token_hash(token), expires_at=expires))
+        audit(db, user.username, 'user_registered', user.id)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, 'This username is already taken. Choose another username.')
+    return dict(access_token=token, token_type='bearer', expires_at=expires, user=public_user(user))
 
 
 @router.post('/auth/login', response_model=SessionResponse)

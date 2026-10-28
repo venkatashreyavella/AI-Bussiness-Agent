@@ -82,6 +82,8 @@ def api(method, path, **kwargs):
 
 
 st.title(page)
+if st.session_state.pop('just_registered', False):
+    st.success('Your account is ready. You are signed in and can start using the inbox.')
 st.caption('BUSINESS INBOX AI AGENT / REVIEW WORKSPACE')
 health = api('GET', '/health')
 if health:

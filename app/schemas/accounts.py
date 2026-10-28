@@ -40,6 +40,16 @@ class AccountUpdate(StrictModel):
         return self
 
 
+class AccountRegistration(Login):
+    password: str = Field(min_length=16, max_length=256)
+    display_name: str | None = Field(default=None, max_length=120)
+
+    @field_validator('display_name')
+    @classmethod
+    def optional_name(cls, value):
+        return value.strip() or None if value is not None else None
+
+
 class PasswordReset(StrictModel):
     new_password: str = Field(min_length=16, max_length=256)
 

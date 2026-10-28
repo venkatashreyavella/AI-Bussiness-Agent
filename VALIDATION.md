@@ -2,6 +2,15 @@
 
 Verified on this Windows workspace with Python 3.12.14.
 
+## Public self-registration update
+
+- The user explicitly selected Reviewer access for anyone who registers. Added public registration options and account creation, with a Create account tab on the sign-in screen and automatic sign-in after successful registration.
+- All **64 tests passed against isolated PostgreSQL schemas**. Targeted registration/dashboard checks also passed 15 tests on Windows before the additional disabled-signup UI case was added.
+- Verified new Reviewer sessions, actual email processing/approval permissions, rejection of Admin/active/id/password-hash registration fields, case-insensitive duplicate rejection, preservation of existing credentials, registration throttling, disabled registration, owner-bootstrap requirement, password confirmation, and successful automatic sign-in through the dashboard.
+- Deployment reports public registration enabled with role Reviewer. The live owner-session smoke test passed after deployment, and Alembic reports no schema drift. Existing accounts were preserved; no extra live accounts were created by verification.
+- Public-browser verification confirmed the Sign in / Create account tabs, username/display-name/password/confirmation fields, and disclosure of shared Reviewer access. Left Create account selected for the user; no real registration credential was entered by the browser verification.
+- Public registration can be disabled through `PUBLIC_SIGNUP_ENABLED=false`. It is explicitly open access to the shared fictional inbox, rather than private per-person mailboxes.
+
 ## Individual accounts and role permissions
 
 - Full final regression suite passed **54 tests against PostgreSQL**, using a separate generated test schema for each database-backed case. The earlier SQLite/Windows run passed 52 tests before the two additional dashboard account-creation/password-error cases were added.

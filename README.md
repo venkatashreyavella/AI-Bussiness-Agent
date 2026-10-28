@@ -2,7 +2,7 @@
 
 A working inbox application that turns business messages into validated extraction, summaries, database evidence, and reply drafts for human review. FastAPI serves an authenticated API; Streamlit provides the review workspace. PostgreSQL is the Docker database. SQLite is supported for a quick local demonstration.
 
-**Individual accounts are enabled.** Sign in as `owner` with your existing dashboard password for the initial administrator account. Add each colleague under **Users**, choosing Admin, Reviewer or Viewer. See [Accounts and permissions](ACCOUNTS.md). Accounts share this business workspace; Viewers cannot modify it.
+**Anyone can create their own account.** On the welcome screen choose **Create account**, pick a username and a password of at least 16 characters, then submit. Registration signs you in immediately as a Reviewer, with access to email intake, processing, drafts and approvals in this shared workspace. Only Admins manage users and passwords. The initial administrator remains `owner` with the original dashboard password. See [Accounts and permissions](ACCOUNTS.md). Set `PUBLIC_SIGNUP_ENABLED=false` and restart the API to return to administrator-managed registration.
 
 **All included customers, emails, invoices and orders are fictional.** Demo mode uses deterministic rules and templates, clearly labeled in the dashboard. OpenAI mode uses the official SDK, Responses API structured parsing and actual function calls. Neither mode sends email.
 
@@ -90,6 +90,7 @@ For a separately installed PostgreSQL server, use `DATABASE_URL=postgresql+psyco
 | `APP_API_TOKEN` | Required bearer token for all inbox, review and analytics routes |
 | `DASHBOARD_PASSWORD` | Initial owner bootstrap password, at least 16 characters; changing it does not reset existing account passwords |
 | `BOOTSTRAP_ADMIN_USERNAME` | First administrator username, default `owner`; applies only when no accounts exist |
+| `PUBLIC_SIGNUP_ENABLED` | `true` by default: visitors can register themselves as Reviewers in the shared workspace; `false` disables public registration |
 | `LLM_PROVIDER` | `demo` (offline rules) or `openai` |
 | `OPENAI_API_KEY` | Your OpenAI key, required only for OpenAI mode |
 | `OPENAI_MODEL` | A model available to your account that supports Responses, structured outputs and function calling; required in OpenAI mode |

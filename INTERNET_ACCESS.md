@@ -6,6 +6,8 @@ The dashboard supports current browsers on desktop, tablet and phone. No client 
 
 The dashboard requires an individual username/password before any inbox data is requested. The first Admin is `owner`, bootstrapped once from `DASHBOARD_PASSWORD`. Set that initial password to at least 16 characters, distinct from `APP_API_TOKEN`. Generate one before first startup with:
 
+Visitors can now select **Create account** and register their own username/password. New accounts receive Reviewer permissions and immediate access to the shared workspace, including email processing and reply approvals. Account administration remains restricted to Admins. Public registration can be disabled with `PUBLIC_SIGNUP_ENABLED=false` followed by an API restart. This open-registration mode is intended for the fictional demonstration, not confidential inbox data.
+
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.configure_dashboard
 ```

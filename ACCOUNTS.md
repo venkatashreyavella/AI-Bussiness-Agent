@@ -2,6 +2,14 @@
 
 Each person now signs in with their own username and password. Accounts belong to one shared business workspace; roles restrict actions, rather than partitioning the inbox into private mailboxes.
 
+## Create your own account
+
+Anyone with the dashboard URL can select **Create account** on the sign-in screen. Choose a unique username and password of at least 16 characters, confirm the password, and optionally provide a display name. Submission creates an enabled Reviewer account and signs you in immediately; no Admin-created login or email invitation is required. Reviewers can read, add and process shared emails, edit drafts, and approve or reject replies. They cannot administer users or reset other people's passwords.
+
+The server always assigns the Reviewer role for public registration. Supplying `role=admin` or account-status fields is rejected. Existing accounts cannot be claimed, overwritten or re-enabled through registration, and usernames are unique without regard to case. Registration is limited to ten attempts per minute globally, including duplicate attempts. PostgreSQL serializes those checks across workers; rate-limit failures return 429 with a Retry-After header.
+
+Public registration is enabled by default for this explicitly open demonstration. **Anyone who registers can see and modify the shared fictional business inbox.** Do not use open signup for confidential customer data. To close signup, set `PUBLIC_SIGNUP_ENABLED=false` and recreate/restart the API; existing accounts remain available and Admins can still create users under Users. Registration does not open until an active Admin has been bootstrapped.
+
 | Permission | Viewer | Reviewer | Admin |
 |---|---|---|---|
 | Read inbox, results, drafts and analytics | Yes | Yes | Yes |
@@ -18,7 +26,7 @@ The initial administrator username is **owner**, or the value of `BOOTSTRAP_ADMI
 
 The migration bootstrap creates the first admin only when there are no accounts. It never resets existing passwords or restores disabled accounts. `DASHBOARD_PASSWORD` is now an initial bootstrap value, not an ongoing login backdoor. Once you change your account password, the old bootstrap credential stops working for that account.
 
-## Add other people
+## Administrator-managed accounts (optional)
 
 1. Sign in as an Admin and select **Users** in Workspace navigation.
 2. Under **Create an account**, enter their username, display name, initial password (at least 16 characters), and role. New accounts default to Viewer.
@@ -43,7 +51,7 @@ Under **Users**, select an existing account to change its role or enabled status
 - Security audit records include account creation/changes, password resets/changes, sign-in/out and draft edits/decisions. They contain actor, action, target and UTC timestamp, without passwords/session tokens. Admins can inspect the latest 100 events.
 - The private `APP_API_TOKEN` remains available to trusted server-side CLI integrations for the existing email workflow. It has privileged workspace access and must not be shared. It cannot manage user accounts, and the dashboard no longer uses it for any request. Integration reviews are logged as `service`; human review decisions use authenticated usernames.
 
-This is a single-workspace account system, not a multi-tenant platform. MFA, federated identity, email verification, self-registration and email password-reset links are not included. Admins recover accounts with the reset action. Keep public access over HTTPS and protect the database and environment files.
+This is a single-workspace account system, not a multi-tenant platform. Public self-registration is included; MFA, federated identity, email verification and email password-reset links are not included. Admins recover accounts with the reset action. Keep public access over HTTPS and protect the database and environment files.
 
 ## Setup and verification
 
@@ -63,4 +71,4 @@ docker compose run --rm --no-deps api python -c "import os,pytest; os.environ['T
 
 Each database-backed test creates a randomly named `inbox_test_…` schema and drops only that schema afterwards. Existing workspace tables and user accounts are not modified by those test fixtures.
 
-API endpoints: `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`, `POST /auth/password`, `GET/POST /users`, `PATCH /users/{id}`, `POST /users/{id}/reset-password`, `GET /users/audit/events`. Human administrator sessions are required for all `/users` endpoints.
+API endpoints: `GET /auth/registration`, `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`, `POST /auth/password`, `GET/POST /users`, `PATCH /users/{id}`, `POST /users/{id}/reset-password`, `GET /users/audit/events`. Registration options and registration are public; all `/users` endpoints require a human administrator session.

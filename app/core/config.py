@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ''
     openai_model: str = ''
     app_api_token: str = ''
+    public_signup_enabled: bool = True
     llm_timeout_seconds: float = 45
     sample_due_date: str = '2026-11-30'
 
