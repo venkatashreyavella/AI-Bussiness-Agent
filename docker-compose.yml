@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: inbox
+      POSTGRES_USER: inbox
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-inbox}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inbox -d inbox"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  migrate:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://inbox:${POSTGRES_PASSWORD:-inbox}@db:5432/inbox
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "alembic upgrade head && python -m scripts.seed_database && python -m scripts.bootstrap_admin"]
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://inbox:${POSTGRES_PASSWORD:-inbox}@db:5432/inbox
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ./evaluation/reports:/app/evaluation/reports:ro
+  dashboard:
+    build: .
+    env_file: .env
+    environment:
+      API_BASE_URL: http://api:8000
+    command: ["streamlit", "run", "frontend/streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+    ports: ["127.0.0.1:8501:8501"]
+    depends_on: [api]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["public"]
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "--url", "http://dashboard:8501"]
+    depends_on:
+      dashboard:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  postgres_data:

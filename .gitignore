@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.venv/
+__pycache__/
+.pytest_cache/
+artifacts/
+*.db
+*.db-*
+*.log
+evaluation/reports/*
+!evaluation/reports/.gitkeep

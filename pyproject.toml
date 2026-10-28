@@ -1,0 +1,9 @@
+[project]
+name = "business-inbox-ai-agent"
+version = "1.0.0"
+requires-python = ">=3.11"
+description = "Business inbox classification, grounded drafting and human review"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
