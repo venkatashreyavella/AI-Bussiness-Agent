@@ -2,6 +2,17 @@
 
 Verified on this Windows workspace with Python 3.12.14.
 
+## Gmail and Outlook support — 29 October 2026
+
+- Added a separate Microsoft Graph/MSAL connection alongside Gmail, allowing each application user to connect one mailbox from each provider simultaneously. Added encrypted Microsoft OAuth flows/token caches, identity-bound single-use callbacks, token renewal, private Inbox import and explicit reviewed MIME submission.
+- Targeted Windows checks passed 48 Gmail/Outlook/dashboard tests, followed by four additional refresh, bounded MIME, provider send-routing and Outlook callback checks. A local check with the installed MSAL library and mocked discovery confirmed generation of a PKCE verifier and S256 challenge.
+- Final full suite passed **107 tests against isolated PostgreSQL schemas** in the rebuilt Linux application image. One existing Starlette/httpx deprecation warning remains.
+- SQLite migration applied with no schema drift. Configuration scripts preserved the Gmail settings and token-encryption key, added private Microsoft placeholders and wrote a private redirect checklist. Secret scan found no configured secrets in Git-eligible files.
+- Rebuilt and deployed the application, applied the PostgreSQL migration, and passed the owner-account and complete demo review smoke checks. The deployed database reports no schema drift.
+- Browser verification through the public HTTPS preview confirmed preserved owner sign-in, both Gmail/Outlook navigation options, and the Outlook setup page showing the missing Microsoft client credentials. Saved the view privately in `artifacts/gmail-outlook-ready.png`; no Microsoft sign-in/consent was attempted.
+- Microsoft Graph 202 responses are recorded as `accepted`, never confirmed delivery. Duplicate/ambiguous submissions and subsequent editing are blocked. Disconnect removes the local Microsoft cache; withdrawing Microsoft consent is a separate user action.
+- Microsoft OAuth client credentials are still missing; live Outlook consent, refresh and delivery remain unverified. Both providers' send flags remain false. Tests use mocks, access no real mail and send no real email. See `OUTLOOK_SETUP.md` for personal and work/school account configuration and organization approval limits.
+
 ## Gmail integration preparation — 29 October 2026
 
 - Added official Google OAuth/Gmail clients, encrypted credentials and PKCE state, identity-bound OAuth callbacks, owner-private recent-inbox import, MIME-to-plain-text handling, and explicit approved Gmail reply delivery.

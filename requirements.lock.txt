@@ -34,6 +34,7 @@ jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 Mako==1.4.3
 MarkupSafe==3.0.4
+msal==1.39.0
 narwhals==2.28.0
 numpy==2.5.4
 oauthlib==4.0.0
@@ -56,6 +57,7 @@ pydantic-settings==2.16.1
 pydantic_core==2.50.1
 pydeck==0.9.3
 Pygments==2.21.0
+PyJWT==2.15.1
 pyparsing==3.3.3
 pytest==8.4.2
 python-dateutil==3.0.0

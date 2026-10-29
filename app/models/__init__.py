@@ -24,6 +24,7 @@ class EmailMessage(Timestamped, Base):
     owner_user_id: Mapped[int | None] = mapped_column(ForeignKey('user_accounts.id', name='fk_emails_owner_user_id'), index=True)
     gmail_message_id: Mapped[str | None] = mapped_column(String(128))
     gmail_thread_id: Mapped[str | None] = mapped_column(String(128))
+    outlook_message_id: Mapped[str | None] = mapped_column(String(512))
     original_message_id: Mapped[str | None] = mapped_column(String(500))
     reply_to: Mapped[str | None] = mapped_column(String(320))
     extraction: Mapped['ExtractedEmailData | None'] = relationship(back_populates='email', uselist=False)
@@ -141,5 +142,22 @@ class GmailOAuthState(Timestamped, Base):
     user_id: Mapped[int] = mapped_column(ForeignKey('user_accounts.id'), index=True)
     state_hash: Mapped[str] = mapped_column(String(64), unique=True)
     encrypted_verifier: Mapped[str] = mapped_column(Text)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used: Mapped[bool] = mapped_column(default=False)
+
+
+class OutlookConnection(Timestamped, Base):
+    __tablename__ = 'outlook_connections'
+    user_id: Mapped[int] = mapped_column(ForeignKey('user_accounts.id'), unique=True)
+    email_address: Mapped[str] = mapped_column(String(320))
+    encrypted_credentials: Mapped[str] = mapped_column(Text)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OutlookOAuthState(Timestamped, Base):
+    __tablename__ = 'outlook_oauth_states'
+    user_id: Mapped[int] = mapped_column(ForeignKey('user_accounts.id'), index=True)
+    state_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    encrypted_flow: Mapped[str] = mapped_column(Text)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used: Mapped[bool] = mapped_column(default=False)

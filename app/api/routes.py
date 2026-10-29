@@ -35,14 +35,15 @@ def serialize_email(email):
             'thread_id': email.thread_id, 'created_at': email.created_at, 'status': email.status,
             'category': email.extraction.category if email.extraction else None,
             'urgency': email.extraction.urgency if email.extraction else None,
-            'private': email.owner_user_id is not None, 'source': 'gmail' if email.gmail_message_id else 'manual',
+            'private': email.owner_user_id is not None, 'source': 'outlook' if email.outlook_message_id else ('gmail' if email.gmail_message_id else 'manual'),
             'reply_to': email.reply_to}
 
 
 def serialize_draft(d):
     return dict(id=d.id, email_id=d.email_id, body=d.body, status=d.status, revision=d.revision,
                 reviewed_at=d.reviewed_at, reviewed_by=d.reviewed_by,
-                sending_enabled=bool(d.email.gmail_message_id and get_settings().gmail_send_enabled and get_settings().llm_provider == 'openai'),
+                sending_enabled=bool(((d.email.gmail_message_id and get_settings().gmail_send_enabled) or
+                                      (d.email.outlook_message_id and get_settings().outlook_send_enabled)) and get_settings().llm_provider == 'openai'),
                 delivery_status=d.delivery_status, gmail_sent_id=d.gmail_sent_id, sent_at=d.sent_at)
 
 
@@ -120,7 +121,7 @@ def get_email(email_id: int, db=Depends(get_db), actor=Depends(current_principal
 def process(email_id: int, db=Depends(get_db), actor=Depends(require_writer)):
     email = required(db, EmailMessage, email_id, actor)
     if email.owner_user_id is not None and get_settings().llm_provider != 'openai':
-        raise HTTPException(409, 'Configure live OpenAI before processing real Gmail messages')
+        raise HTTPException(409, 'Configure live OpenAI before processing real mailbox messages')
     try:
         email = process_email(db, email_id, get_settings())
     except ProcessingConflict:
@@ -181,12 +182,16 @@ def reject(draft_id: int, payload: Review, db=Depends(get_db), actor=Depends(req
 @router.post('/drafts/{draft_id}/send', response_model=DraftResponse)
 def send(draft_id: int, payload: SendRequest | None = None, actor=Depends(require_writer), db=Depends(get_db)):
     from app.services.gmail_service import send_approved_draft
+    from app.services.outlook_service import send_approved_draft as send_outlook
     draft = required(db, ReplyDraft, draft_id, actor)
-    if not get_settings().gmail_send_enabled or not draft.email.gmail_message_id:
-        raise HTTPException(409, 'Sending is disabled. Connect Gmail and configure approved sending first.')
+    settings = get_settings()
+    outlook = bool(draft.email.outlook_message_id)
+    enabled = settings.outlook_send_enabled if outlook else settings.gmail_send_enabled
+    if not enabled or not (outlook or draft.email.gmail_message_id):
+        raise HTTPException(409, 'Sending is disabled. Connect Gmail or Outlook and configure approved sending first.')
     if payload is None:
         raise HTTPException(422, 'Confirm the recipient, reviewed revision and SEND action')
-    send_approved_draft(db, draft, actor, payload, get_settings())
+    (send_outlook if outlook else send_approved_draft)(db, draft, actor, payload, settings)
     return serialize_draft(draft)
 
 

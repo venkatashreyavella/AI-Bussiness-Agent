@@ -10,7 +10,7 @@ def visible_emails(actor):
 
 
 def check_email_access(email, actor):
-    # Real Gmail mail is private to its owner, including from other administrators and service integrations.
+    # Real provider mail is private to its owner, including from other administrators and service integrations.
     if email is None or (email.owner_user_id is not None and email.owner_user_id != actor.user_id):
         raise HTTPException(404, 'Record not found')
     return email

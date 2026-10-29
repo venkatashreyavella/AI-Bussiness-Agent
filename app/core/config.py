@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     google_redirect_uri: str = 'http://127.0.0.1:8501/'
     token_encryption_key: str = ''
     gmail_send_enabled: bool = False
+    microsoft_client_id: str = ''
+    microsoft_client_secret: str = ''
+    microsoft_tenant: str = 'common'
+    microsoft_redirect_uri: str = 'http://127.0.0.1:8501/'
+    outlook_send_enabled: bool = False
 
     @model_validator(mode='after')
     def validate_config(self):

@@ -10,25 +10,28 @@ def handle_callback():
     error = st.query_params.get('error')
     st.query_params.clear()
     if error or not code or not state:
-        st.warning('Google connection was cancelled or incomplete. Sign in and start again.')
+        st.warning('Email connection was cancelled or incomplete. Sign in and start again.')
         return
-    st.session_state['pending_gmail_callback'] = {'code': code, 'state': state}
-    st.info('Sign in to the same application account that started Gmail connection to complete it.')
+    provider = 'outlook' if state.startswith('outlook:') else 'gmail'
+    st.session_state['pending_gmail_callback'] = {'code': code, 'state': state, 'provider': provider}
+    st.info('Sign in to the same application account that started this email connection to complete it.')
 
 
 def complete_callback():
     pending = st.session_state.pop('pending_gmail_callback', None)
     if not pending:
         return
+    provider = pending.pop('provider', 'gmail')
+    label = 'Outlook' if provider == 'outlook' else 'Gmail'
     try:
-        response = httpx.request('POST', os.getenv('API_BASE_URL', 'http://127.0.0.1:8000').rstrip('/') + '/gmail/callback',
+        response = httpx.request('POST', os.getenv('API_BASE_URL', 'http://127.0.0.1:8000').rstrip('/') + f'/{provider}/callback',
                                 json=pending, headers={'Authorization': 'Bearer ' + st.session_state['auth_token']}, timeout=60)
         if response.status_code == 200:
-            st.success('Gmail connected. Sign in if requested, then open Gmail to sync messages.')
+            st.success(f'{label} connected. Open {label} to sync messages.')
         else:
-            st.error('Gmail connection could not be completed. Use the account that started connection, check OAuth settings, and reconnect.')
+            st.error(f'{label} connection could not be completed. Use the account that started connection, check OAuth settings, and reconnect.')
     except httpx.HTTPError:
-        st.error('The Gmail connection service is unavailable. Start the connection again after signing in.')
+        st.error(f'The {label} connection service is unavailable. Start the connection again after signing in.')
 
 
 def gmail_page(api, can_write):

@@ -11,6 +11,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from frontend.security import require_login, sign_out
 from frontend.gmail_ui import handle_callback, complete_callback, gmail_page
+from frontend.outlook_ui import outlook_page
 
 load_dotenv()
 st.set_page_config(page_title='Business Inbox · AI Agent', page_icon='✉', layout='wide')
@@ -47,9 +48,9 @@ with st.sidebar:
     st.write('Use the Workspace navigation at the top of every page.')
     st.button('Sign out', on_click=sign_out)
     st.divider()
-    st.caption('Manual demo emails are shared. Gmail imports are private. Every reply requires human review.')
+    st.caption('Manual demo emails are shared. Gmail and Outlook imports are private. Every reply requires human review.')
 
-pages = ['Inbox', 'Email Details', 'Reply Review', 'Analytics', 'Gmail', 'My Account']
+pages = ['Inbox', 'Email Details', 'Reply Review', 'Analytics', 'Gmail', 'Outlook', 'My Account']
 if user['role'] == 'admin':
     pages.append('Users')
 if st.session_state.get('workspace') not in pages:
@@ -96,7 +97,7 @@ if page == 'Inbox':
     if not can_write:
         st.info('Viewer access: you can inspect emails, drafts and analytics. A reviewer or admin can make changes.')
     with st.expander('＋ Add an email', expanded=False):
-        st.caption('This demo input is visible to all workspace users. Use Gmail for private email imports.')
+        st.caption('This demo input is visible to all workspace users. Use Gmail or Outlook for private email imports.')
         manual, upload = st.tabs(['Write or paste', 'Import .eml'])
         with manual:
             with st.form('new_email'):
@@ -146,7 +147,7 @@ if page == 'Inbox':
                 st.text(f"From: {email['sender']}")
                 st.write(f"Status: {readable(email['status'])} · Category: {readable(email['category'])} · Urgency: {readable(email['urgency'])}")
                 st.caption(f"Received: {email['created_at']}")
-                st.caption('Private Gmail message · visible only to you' if email.get('private') else 'Shared demonstration email')
+                st.caption(f"Private {email.get('source', 'mailbox').title()} message · visible only to you" if email.get('private') else 'Shared demonstration email')
                 st.button(f"Open email #{email['id']}", key=f"open_{email['id']}", on_click=open_email, args=(email['id'],))
         with st.expander('Optional data table'):
             st.dataframe(pd.DataFrame(emails).drop(columns=['body', 'thread_id']), hide_index=True, width='stretch')
@@ -167,7 +168,7 @@ elif page in ['Email Details', 'Reply Review']:
                 st.text(email['body'])
                 live_required = email.get('private') and (not health or health['provider'] != 'openai')
                 if live_required:
-                    st.warning('Configure live OpenAI on the server before processing real Gmail messages.')
+                    st.warning('Configure live OpenAI on the server before processing real mailbox messages.')
                 if email['status'] in ['new', 'failed'] and st.button('Process email', type='primary', disabled=not can_write or live_required):
                     with st.spinner('Extracting information and looking up business records…'):
                         processed = api('POST', f'/emails/{ident}/process')
@@ -227,24 +228,28 @@ elif page in ['Email Details', 'Reply Review']:
             delivery = draft.get('delivery_status', 'not_sent')
             if delivery == 'sent':
                 st.success(f"Gmail confirmed sending at {draft['sent_at']}. Message ID: {draft['gmail_sent_id']}")
+            elif delivery == 'accepted':
+                st.success(f"Microsoft accepted this reply for delivery at {draft['sent_at']}. Final delivery is not confirmed; check Outlook Sent Items.")
             elif delivery in {'sending', 'unknown'}:
-                st.warning('A delivery attempt exists. Check Gmail Sent before taking any further action. Automatic retries are blocked.')
-            elif email.get('source') == 'gmail':
+                st.warning('A delivery attempt exists. Check the connected mailbox Sent folder before taking any further action. Automatic retries are blocked.')
+            elif email.get('source') in {'gmail', 'outlook'}:
+                provider = email['source']
+                label = 'Gmail' if provider == 'gmail' else 'Outlook'
                 recipient = email.get('reply_to') or email['sender']
-                mailbox = api('GET', '/gmail/status')
+                mailbox = api('GET', f'/{provider}/status')
                 connected = bool(mailbox and mailbox['connected'])
                 if connected:
                     st.write('Sending mailbox: ' + mailbox['email_address'])
                 st.write('Reply recipient: ' + recipient)
                 confirmed = st.checkbox(f"I confirm sending this exact approved revision ({draft['revision']}) to {recipient}")
-                if st.button('Send approved reply via Gmail', type='primary', disabled=not (
+                if st.button(f'Send approved reply via {label}', type='primary', disabled=not (
                     can_write and connected and confirmed and draft['status'] == 'approved' and draft['sending_enabled'] and text == draft['body'])):
                     if api('POST', f"/drafts/{draft['id']}/send", json={'revision': draft['revision'], 'recipient': recipient, 'confirmation': 'SEND'}):
                         st.rerun()
                 if not draft['sending_enabled']:
-                    st.info('Sending needs a connected Gmail account, live OpenAI configuration and GMAIL_SEND_ENABLED=true.')
+                    st.info(f'Sending needs a connected {label} account, live OpenAI configuration and {provider.upper()}_SEND_ENABLED=true.')
             else:
-                st.info('Shared demo drafts are never sent. Connect Gmail to import and review real email replies.')
+                st.info('Shared demo drafts are never sent. Connect Gmail or Outlook to import and review real email replies.')
         else:
             st.info('Process this email on Email Details to create a reply draft.')
 
@@ -282,6 +287,9 @@ elif page == 'Analytics':
 
 elif page == 'Gmail':
     gmail_page(api, can_write)
+
+elif page == 'Outlook':
+    outlook_page(api, can_write)
 
 elif page == 'My Account':
     st.write(f"Username: {user['username']}")

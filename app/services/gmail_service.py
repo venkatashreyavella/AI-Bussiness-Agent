@@ -35,7 +35,7 @@ def cipher(settings):
     try:
         return Fernet(settings.token_encryption_key.encode())
     except (ValueError, TypeError):
-        raise HTTPException(503, 'Gmail token encryption key is missing or invalid')
+        raise HTTPException(503, 'Mailbox token encryption key is missing or invalid')
 
 
 def oauth_flow(settings, verifier, state=None):

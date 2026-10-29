@@ -1,5 +1,7 @@
 # Activate real Gmail and live AI
 
+You can connect Gmail and Outlook at the same time under your application account. Outlook uses a separate Microsoft registration; see [OUTLOOK_SETUP.md](OUTLOOK_SETUP.md).
+
 The application includes Google OAuth connection, private Gmail imports, live AI processing through the existing OpenAI provider, and explicitly approved Gmail delivery. **Live verification requires your Google OAuth client credentials, an OpenAI key/model, and your manual Google consent.** None of those credentials are supplied by the project. The working offline demo remains available while you configure them.
 
 ## 1. Prepare the private configuration
