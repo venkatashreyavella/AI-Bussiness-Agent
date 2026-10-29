@@ -1,6 +1,6 @@
 # Individual accounts and permissions
 
-Each person now signs in with their own username and password. Accounts belong to one shared business workspace; roles restrict actions, rather than partitioning the inbox into private mailboxes.
+Each person signs in with their own username and password. Manual demo emails use a shared business workspace. Real Gmail imports are private to their owner, including from other Admins; see `GMAIL_SETUP.md`.
 
 ## Create your own account
 
@@ -18,7 +18,7 @@ Public registration is enabled by default for this explicitly open demonstration
 | Change own password | Yes | Yes | Yes |
 | Create/disable accounts, assign roles, reset passwords | No | No | Yes |
 | View account and review audit events | No | No | Yes |
-| Send email | Unavailable | Unavailable | Unavailable |
+| Send an explicitly confirmed approved reply from own Gmail | No | When configured | When configured |
 
 ## Owner's first sign-in
 

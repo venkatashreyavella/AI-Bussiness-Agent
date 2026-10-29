@@ -54,10 +54,11 @@ def process_email(db, email_id, settings, provider=None):
         thread = []
         if email.thread_id:
             earlier = db.scalars(select(EmailMessage).where(EmailMessage.thread_id == email.thread_id,
+                EmailMessage.owner_user_id == email.owner_user_id,
                 EmailMessage.id < email.id).order_by(EmailMessage.id.desc()).limit(5)).all()
             thread = [{'sender': e.sender, 'subject': e.subject, 'body': e.body[:5000]} for e in reversed(earlier)]
         extraction = extract_email_data(provider, payload, thread)
-        tools = BusinessTools(db, run.id)
+        tools = BusinessTools(db, run.id, include_demo_records=email.owner_user_id is None)
         retrieve_business_context(extraction, tools)
         draft = generate_reply_draft(provider, payload, extraction, tools, thread)
         db.add(ExtractedEmailData(email_id=email_id, category=extraction.category.value, urgency=extraction.urgency,

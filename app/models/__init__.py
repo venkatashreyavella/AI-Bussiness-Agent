@@ -21,6 +21,11 @@ class EmailMessage(Timestamped, Base):
     thread_id: Mapped[str | None] = mapped_column(String(120), index=True)
     fingerprint: Mapped[str] = mapped_column(String(64), unique=True)
     status: Mapped[str] = mapped_column(String(24), default='new', index=True)
+    owner_user_id: Mapped[int | None] = mapped_column(ForeignKey('user_accounts.id', name='fk_emails_owner_user_id'), index=True)
+    gmail_message_id: Mapped[str | None] = mapped_column(String(128))
+    gmail_thread_id: Mapped[str | None] = mapped_column(String(128))
+    original_message_id: Mapped[str | None] = mapped_column(String(500))
+    reply_to: Mapped[str | None] = mapped_column(String(320))
     extraction: Mapped['ExtractedEmailData | None'] = relationship(back_populates='email', uselist=False)
     draft: Mapped['ReplyDraft | None'] = relationship(back_populates='email', uselist=False)
 
@@ -67,6 +72,9 @@ class ReplyDraft(Timestamped, Base):
     revision: Mapped[int] = mapped_column(Integer, default=1)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reviewed_by: Mapped[str | None] = mapped_column(String(120))
+    delivery_status: Mapped[str] = mapped_column(String(24), default='not_sent', server_default='not_sent')
+    gmail_sent_id: Mapped[str | None] = mapped_column(String(128))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     email: Mapped[EmailMessage] = relationship(back_populates='draft')
 
 
@@ -118,3 +126,20 @@ class SecurityAudit(Timestamped, Base):
     actor: Mapped[str] = mapped_column(String(80))
     action: Mapped[str] = mapped_column(String(60))
     target: Mapped[str] = mapped_column(String(120))
+
+
+class GmailConnection(Timestamped, Base):
+    __tablename__ = 'gmail_connections'
+    user_id: Mapped[int] = mapped_column(ForeignKey('user_accounts.id'), unique=True)
+    email_address: Mapped[str] = mapped_column(String(320))
+    encrypted_credentials: Mapped[str] = mapped_column(Text)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GmailOAuthState(Timestamped, Base):
+    __tablename__ = 'gmail_oauth_states'
+    user_id: Mapped[int] = mapped_column(ForeignKey('user_accounts.id'), index=True)
+    state_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    encrypted_verifier: Mapped[str] = mapped_column(Text)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used: Mapped[bool] = mapped_column(default=False)

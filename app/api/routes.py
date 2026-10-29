@@ -11,15 +11,22 @@ from app.db.session import get_db
 from app.models import EmailMessage, ReplyDraft, ProcessingRun, ToolExecutionLog, ExtractedEmailData, utcnow
 from app.schemas import EmailCreate, DraftEdit, Review, Category, EmailResponse, DraftResponse, ResultResponse
 from app.services.email_service import process_email, ProcessingConflict
-from app.core.security import require_writer, audit
+from app.core.security import require_writer, current_principal, audit
+from app.core.email_access import visible_emails, check_email_access
+from app.schemas.gmail import SendRequest
 
 router = APIRouter()
 
 
-def required(db, model, ident):
+def required(db, model, ident, actor=None):
     row = db.get(model, ident)
     if row is None:
         raise HTTPException(404, 'Record not found')
+    if actor is not None:
+        if model is EmailMessage:
+            check_email_access(row, actor)
+        elif model is ReplyDraft:
+            check_email_access(db.get(EmailMessage, row.email_id), actor)
     return row
 
 
@@ -27,12 +34,16 @@ def serialize_email(email):
     return {'id': email.id, 'sender': email.sender, 'subject': email.subject, 'body': email.body,
             'thread_id': email.thread_id, 'created_at': email.created_at, 'status': email.status,
             'category': email.extraction.category if email.extraction else None,
-            'urgency': email.extraction.urgency if email.extraction else None}
+            'urgency': email.extraction.urgency if email.extraction else None,
+            'private': email.owner_user_id is not None, 'source': 'gmail' if email.gmail_message_id else 'manual',
+            'reply_to': email.reply_to}
 
 
 def serialize_draft(d):
     return dict(id=d.id, email_id=d.email_id, body=d.body, status=d.status, revision=d.revision,
-                reviewed_at=d.reviewed_at, reviewed_by=d.reviewed_by, sending_enabled=False)
+                reviewed_at=d.reviewed_at, reviewed_by=d.reviewed_by,
+                sending_enabled=bool(d.email.gmail_message_id and get_settings().gmail_send_enabled and get_settings().llm_provider == 'openai'),
+                delivery_status=d.delivery_status, gmail_sent_id=d.gmail_sent_id, sent_at=d.sent_at)
 
 
 @router.post('/emails', status_code=201, response_model=EmailResponse, dependencies=[Depends(require_writer)])
@@ -87,8 +98,8 @@ async def import_email(file: UploadFile = File(...), db=Depends(get_db)):
 def list_emails(q: str = Query('', max_length=200), category: Category | None = None,
                 urgency: str | None = Query(None, pattern='^(low|normal|high)$'),
                 status: str | None = Query(None, pattern='^(new|processing|processed|failed)$'),
-                offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), db=Depends(get_db)):
-    statement = select(EmailMessage).outerjoin(ExtractedEmailData)
+                offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), db=Depends(get_db), actor=Depends(current_principal)):
+    statement = select(EmailMessage).outerjoin(ExtractedEmailData).where(visible_emails(actor))
     if q:
         statement = statement.where(or_(EmailMessage.subject.icontains(q, autoescape=True), EmailMessage.sender.icontains(q, autoescape=True)))
     if category:
@@ -101,25 +112,27 @@ def list_emails(q: str = Query('', max_length=200), category: Category | None = 
 
 
 @router.get('/emails/{email_id}', response_model=EmailResponse)
-def get_email(email_id: int, db=Depends(get_db)):
-    return serialize_email(required(db, EmailMessage, email_id))
+def get_email(email_id: int, db=Depends(get_db), actor=Depends(current_principal)):
+    return serialize_email(required(db, EmailMessage, email_id, actor))
 
 
 @router.post('/emails/{email_id}/process', response_model=ResultResponse, dependencies=[Depends(require_writer)])
-def process(email_id: int, db=Depends(get_db)):
-    required(db, EmailMessage, email_id)
+def process(email_id: int, db=Depends(get_db), actor=Depends(require_writer)):
+    email = required(db, EmailMessage, email_id, actor)
+    if email.owner_user_id is not None and get_settings().llm_provider != 'openai':
+        raise HTTPException(409, 'Configure live OpenAI before processing real Gmail messages')
     try:
         email = process_email(db, email_id, get_settings())
     except ProcessingConflict:
         raise HTTPException(409, 'Email is already processing')
     if email.status == 'failed':
         raise HTTPException(502, 'Processing failed; inspect results for a safe error code and retry')
-    return get_results(email_id, db)
+    return get_results(email_id, db, actor)
 
 
 @router.get('/emails/{email_id}/results', response_model=ResultResponse)
-def get_results(email_id: int, db=Depends(get_db)):
-    email = required(db, EmailMessage, email_id)
+def get_results(email_id: int, db=Depends(get_db), actor=Depends(current_principal)):
+    email = required(db, EmailMessage, email_id, actor)
     runs = db.scalars(select(ProcessingRun).where(ProcessingRun.email_id == email_id).order_by(ProcessingRun.id)).all()
     logs = db.scalars(select(ToolExecutionLog).where(ToolExecutionLog.run_id.in_([r.id for r in runs]))).all() if runs else []
     return {'email': serialize_email(email), 'extraction': email.extraction.data if email.extraction else None,
@@ -130,8 +143,11 @@ def get_results(email_id: int, db=Depends(get_db)):
 
 
 def mutate_draft(db, ident, revision, values, actor=None, action=None):
-    required(db, ReplyDraft, ident)
-    result = db.execute(update(ReplyDraft).where(ReplyDraft.id == ident, ReplyDraft.revision == revision)
+    draft = required(db, ReplyDraft, ident, actor)
+    if draft.delivery_status != 'not_sent':
+        raise HTTPException(409, 'This draft has a delivery attempt; it cannot be edited or re-reviewed')
+    result = db.execute(update(ReplyDraft).where(ReplyDraft.id == ident, ReplyDraft.revision == revision,
+                        ReplyDraft.delivery_status == 'not_sent')
                         .values(**values, revision=revision + 1))
     if result.rowcount != 1:
         db.rollback()
@@ -162,17 +178,24 @@ def reject(draft_id: int, payload: Review, db=Depends(get_db), actor=Depends(req
     return mutate_draft(db, draft_id, payload.revision, dict(status='rejected', reviewed_at=utcnow(), reviewed_by=reviewer), actor, 'draft_rejected')
 
 
-@router.post('/drafts/{draft_id}/send')
-def send_disabled(draft_id: int):
-    raise HTTPException(409, 'Sending is disabled. No email delivery integration is configured.')
+@router.post('/drafts/{draft_id}/send', response_model=DraftResponse)
+def send(draft_id: int, payload: SendRequest | None = None, actor=Depends(require_writer), db=Depends(get_db)):
+    from app.services.gmail_service import send_approved_draft
+    draft = required(db, ReplyDraft, draft_id, actor)
+    if not get_settings().gmail_send_enabled or not draft.email.gmail_message_id:
+        raise HTTPException(409, 'Sending is disabled. Connect Gmail and configure approved sending first.')
+    if payload is None:
+        raise HTTPException(422, 'Confirm the recipient, reviewed revision and SEND action')
+    send_approved_draft(db, draft, actor, payload, get_settings())
+    return serialize_draft(draft)
 
 
 @router.get('/analytics')
-def analytics(db=Depends(get_db)):
+def analytics(db=Depends(get_db), actor=Depends(current_principal)):
     from collections import Counter
-    emails = db.scalars(select(EmailMessage)).all()
-    drafts = db.scalars(select(ReplyDraft)).all()
-    runs = db.scalars(select(ProcessingRun)).all()
+    emails = db.scalars(select(EmailMessage).where(visible_emails(actor))).all()
+    drafts = db.scalars(select(ReplyDraft).join(EmailMessage).where(visible_emails(actor))).all()
+    runs = db.scalars(select(ProcessingRun).join(EmailMessage).where(visible_emails(actor))).all()
     extracted = [e.extraction.data for e in emails if e.extraction]
     report = Path('evaluation/reports/latest.json')
     return dict(total_emails=len(emails), statuses=dict(Counter(e.status for e in emails)),

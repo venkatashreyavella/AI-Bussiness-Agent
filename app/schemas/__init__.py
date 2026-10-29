@@ -79,6 +79,9 @@ class EmailResponse(StrictModel):
     status: str
     category: Category | None
     urgency: str | None
+    private: bool = False
+    source: str = 'manual'
+    reply_to: str | None = None
 
 
 class DraftResponse(StrictModel):
@@ -90,6 +93,9 @@ class DraftResponse(StrictModel):
     reviewed_at: datetime | None
     reviewed_by: str | None
     sending_enabled: bool
+    delivery_status: str = 'not_sent'
+    gmail_sent_id: str | None = None
+    sent_at: datetime | None = None
 
 
 class RunResponse(StrictModel):

@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     public_signup_enabled: bool = True
     llm_timeout_seconds: float = 45
     sample_due_date: str = '2026-11-30'
+    google_client_id: str = ''
+    google_client_secret: str = ''
+    google_redirect_uri: str = 'http://127.0.0.1:8501/'
+    token_encryption_key: str = ''
+    gmail_send_enabled: bool = False
 
     @model_validator(mode='after')
     def validate_config(self):

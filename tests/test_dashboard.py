@@ -31,7 +31,7 @@ def test_dashboard_pages(client, payload, account_factory):
         assert not any(field.label == 'Access token' for field in app.text_input)
         next(button for button in app.button if button.label == f'Open email #{ident}').click().run()
         assert app.radio[0].value == 'Email Details'
-        for page in ['Email Details', 'Reply Review', 'Analytics', 'My Account', 'Users']:
+        for page in ['Email Details', 'Reply Review', 'Analytics', 'Gmail', 'My Account', 'Users']:
             app.radio[0].set_value(page).run()
             assert not app.exception
         assert 'Create account' in [b.label for b in app.button]
@@ -151,3 +151,18 @@ def test_disabled_registration_hides_signup(client, monkeypatch):
         assert not app.exception
         assert not any(button.label == 'Create account' for button in app.button)
         assert not any('New here?' in item.value for item in app.markdown)
+
+
+def test_gmail_callback_waits_for_login_and_clears_url(client, account_factory):
+    user = account_factory()
+    with patch('httpx.request', side_effect=bridge(client)) as requests, patch('app.api.gmail.finish_oauth') as finish:
+        app = AppTest.from_file(SCRIPT, default_timeout=20)
+        app.query_params['code'] = 'private-authorization-code'
+        app.query_params['state'] = 's' * 54
+        app.run()
+        assert not any('/gmail/callback' in call.args[1] for call in requests.call_args_list)
+        assert not app.query_params
+        sign_in(app, 'owner')
+        assert finish.call_count == 1
+        assert finish.call_args.args[-1] == user.id
+        assert any('Gmail connected' in item.value for item in app.success)

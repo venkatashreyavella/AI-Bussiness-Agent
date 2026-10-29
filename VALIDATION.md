@@ -2,6 +2,16 @@
 
 Verified on this Windows workspace with Python 3.12.14.
 
+## Gmail integration preparation — 29 October 2026
+
+- Added official Google OAuth/Gmail clients, encrypted credentials and PKCE state, identity-bound OAuth callbacks, owner-private recent-inbox import, MIME-to-plain-text handling, and explicit approved Gmail reply delivery.
+- Final full suite passed **88 tests against isolated PostgreSQL schemas**. Earlier targeted Gmail/dashboard checks passed 32 tests on Windows. Google/OpenAI calls are mocked; no real Gmail content was accessed and no real email was sent.
+- Tests cover PKCE, encrypted credentials, expired/consumed/wrong-account OAuth state, login-required callback completion and URL clearing, private mailbox reads/results/analytics/actions, excluded fictional business records, duplicate import, HTML script removal, provider failures, explicit approved revision/recipient checks, duplicate/ambiguous delivery protection, concurrent edit blocking, disconnect revocation and original-mailbox binding after reconnect.
+- Applied the additive migration on SQLite and PostgreSQL; Alembic reports no schema drift. Existing owner-account and email/review smoke tests passed after deployment. Existing accounts and shared demo messages were preserved.
+- Generated a private token-encryption key and activation checklist. Google OAuth client ID/secret and OpenAI API key/model are still missing. Live Google consent, live AI and actual delivery remain unverified and disabled until the user supplies those credentials and authorizes access.
+- Added Gmail setup/configuration guidance in `GMAIL_SETUP.md`. Sync is user-triggered (20 recent Inbox messages), not unattended continuous monitoring. The temporary preview tunnel required renewal after its previous hostname expired; a stable domain is recommended before ongoing OAuth use.
+- Verified the renewed public HTTPS dashboard in the browser: existing owner sign-in succeeded, Gmail navigation opened, and missing Google/OpenAI configuration was clearly displayed. Saved the setup view privately in `artifacts/gmail-ready.png`; no Google consent or live email action was attempted.
+
 ## Public self-registration update
 
 - The user explicitly selected Reviewer access for anyone who registers. Added public registration options and account creation, with a Create account tab on the sign-in screen and automatic sign-in after successful registration.
